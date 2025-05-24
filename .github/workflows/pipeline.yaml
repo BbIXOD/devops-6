@@ -57,6 +57,8 @@ jobs:
           projectBaseDir: .
         env:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+          SONAR_PROJECT_KEY: devops-6
+          SONAR_ORGANIZATION: bbixod
 
   container-build:
     needs: build
