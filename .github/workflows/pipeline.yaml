@@ -34,7 +34,7 @@ jobs:
           dotnet test
 
       - name: Build & Test drone (Backend 2)
-        working-directory: CommunicationControl/DevOpsProject.Hivemind.API
+        working-directory: CommunicationControl/DevOpsProject.HiveMind.API
         run: |
           dotnet build
           dotnet test
