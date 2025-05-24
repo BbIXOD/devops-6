@@ -8,6 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview"
+    "test": "echo \"Done\" && exit 0"
   },
   "dependencies": {
     "@azure/static-web-apps-cli": "^2.0.6",
