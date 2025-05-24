@@ -59,7 +59,7 @@ jobs:
           SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
 
       - name: Login to ACR
-        uses: azure/docker-login@v3
+        uses: azure/docker-login@v2
         with:
           login-server: ${{ env.REGISTRY }}
           username: ${{ secrets.ACR_USERNAME }}
