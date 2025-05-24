@@ -4,6 +4,8 @@ WORKDIR /src
 
 COPY . .
 
+RUN ls -al .
+
 RUN dotnet restore CommunicationControl/DevOpsProject/DevOpsProject.csproj
 
 RUN dotnet publish CommunicationControl/DevOpsProject/DevOpsProject.csproj \
