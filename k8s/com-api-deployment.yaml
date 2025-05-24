@@ -20,10 +20,9 @@ spec:
       labels:
         io.kompose.service: com
     spec:
-      
       containers:
-          name: com
-          ports:
-            - containerPort: 8080
-              protocol: TCP
+        name: com
+        ports:
+          - containerPort: 8080
+            protocol: TCP
       restartPolicy: Always
