@@ -4,11 +4,9 @@ WORKDIR /src
 
 COPY . .
 
-RUN ls -al .
+RUN dotnet restore CommunicationControl/DevOpsProject/DevOpsProject.CommunicationControl.API.csproj
 
-RUN dotnet restore CommunicationControl/DevOpsProject/DevOpsProject.csproj
-
-RUN dotnet publish CommunicationControl/DevOpsProject/DevOpsProject.csproj \
+RUN dotnet publish CommunicationControl/DevOpsProject/DevOpsProject.CommunicationControl.API.csproj \
     -c Release -o /app/publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
