@@ -26,7 +26,7 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Build & Test com (Backend 1)
-        working-directory: CommunicationControl/DevopsProject
+        working-directory: CommunicationControl/DevOpsProject
         env:
           Redis__ConnectionString: ${{ secrets.REDIS_CONNECTION_STRING }}
         run: |
@@ -34,7 +34,7 @@ jobs:
           dotnet test
 
       - name: Build & Test drone (Backend 2)
-        working-directory: CommunicationControl/DevopsProject.Hivemind.API
+        working-directory: CommunicationControl/DevOpsProject.Hivemind.API
         run: |
           dotnet build
           dotnet test
