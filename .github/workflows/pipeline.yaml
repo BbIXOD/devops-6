@@ -89,10 +89,13 @@ jobs:
           docker push $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.tag.outputs.tag }}
           docker push $REGISTRY/$IMAGE_PREFIX-map:${{ steps.tag.outputs.tag }}
 
+
       - name: Set up Kubeconfig
-        uses: azure/aks-set-context@v3
+        uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+        uses: azure/aks-set-context@v3
+        with:
           cluster-name: ${{ secrets.AKS_CLUSTER }}
           resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
 
