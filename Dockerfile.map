@@ -1,0 +1,7 @@
+FROM nginx:alpine
+
+COPY . /usr/share/nginx/html
+RUN rm /usr/share/nginx/html/config.json
+
+EXPOSE 3000
+CMD ["nginx", "-g", "daemon off;"]

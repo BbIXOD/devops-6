@@ -1,0 +1,139 @@
+
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [dev, main]
+  workflow_dispatch:
+
+env:
+  REGISTRY: lab4registry.azurecr.io
+  IMAGE_PREFIX: someapp
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build & Test com (Backend 1)
+        working-directory: CommunicationControl/DevopsProject
+        env:
+          Redis__ConnectionString: ${{ secrets.REDIS_CONNECTION_STRING }}
+        run: |
+          dotnet build
+          dotnet test
+
+      - name: Build & Test drone (Backend 2)
+        working-directory: CommunicationControl/DevopsProject.Hivemind.API
+        run: |
+          dotnet build
+          dotnet test
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build map (Frontend)
+        working-directory: MapClient
+        run: |
+          npm ci
+          npm run build
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: .
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+
+  container-build:
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Login to ACR
+        uses: azure/docker-login@v1
+        with:
+          login-server: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Set tag based on branch
+        id: tag
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          BRANCH=$(echo "${GITHUB_REF##*/}")
+          if [ "$BRANCH" == "main" ]; then
+            TAG="$SHORT_SHA-prod"
+          else
+            TAG="$SHORT_SHA-dev"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+
+      - name: Build Docker Images
+        run: |
+          docker build -t $REGISTRY/$IMAGE_PREFIX-com:${{ steps.tag.outputs.tag }} -f Dockerfile.com .
+          docker build -t $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.tag.outputs.tag }} -f Dockerfile.drone .
+          docker build -t $REGISTRY/$IMAGE_PREFIX-map:${{ steps.tag.outputs.tag }} -f Dockerfile.map .
+
+      - name: Push Docker Images
+        run: |
+          docker push $REGISTRY/$IMAGE_PREFIX-com:${{ steps.tag.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.tag.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_PREFIX-map:${{ steps.tag.outputs.tag }}
+
+  deploy:
+    needs: container-build
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/dev' || github.ref == 'refs/heads/main'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+
+      - name: Set up Kubeconfig
+        uses: azure/aks-set-context@v3
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+          cluster-name: ${{ secrets.AKS_CLUSTER }}
+          resource-group: ${{ secrets.AKS_RESOURCE_GROUP }}
+
+      - name: Deploy Kubernetes manifests
+        run: |
+          kubectl apply -f k8s/com-api-service.yaml
+          kubectl apply -f k8s/com-api-service.yaml
+          kubectl apply -f k8s/drone-api-service.yaml
+          kubectl apply -f k8s/drone-api-deployment.yaml
+          kubectl apply -f k8s/map-ui-deployment.yaml
+          kubectl apply -f k8s/map-ui-deployment.yaml
+
+
+      - name: Deploy to AKS
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          BRANCH=$(echo "${GITHUB_REF##*/}")
+          if [ "$BRANCH" == "main" ]; then
+            TAG="$SHORT_SHA-prod"
+            ENV="production"
+          else
+            TAG="$SHORT_SHA-dev"
+            ENV="development"
+          fi
+
+          kubectl set image deployment/com com=$REGISTRY/$IMAGE_PREFIX-com:$TAG -n $ENV
+          kubectl set image deployment/drone drone=$REGISTRY/$IMAGE_PREFIX-drone:$TAG -n $ENV
+          kubectl set image deployment/map map=$REGISTRY/$IMAGE_PREFIX-map:$TAG -n $ENV
