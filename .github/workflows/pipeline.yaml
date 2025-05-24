@@ -90,10 +90,12 @@ jobs:
           docker push $REGISTRY/$IMAGE_PREFIX-map:${{ steps.tag.outputs.tag }}
 
 
-      - name: Set up Kubeconfig
+      - name: Login to azure
         uses: azure/login@v1
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Set up Kubeconfig
         uses: azure/aks-set-context@v3
         with:
           cluster-name: ${{ secrets.AKS_CLUSTER }}
