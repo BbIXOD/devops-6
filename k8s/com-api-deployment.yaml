@@ -21,8 +21,9 @@ spec:
         io.kompose.service: com
     spec:
       containers:
-        name: com
+      - name: com
+        image: nginx:latest
         ports:
-          - containerPort: 8080
-            protocol: TCP
+        - containerPort: 8080
+          protocol: TCP
       restartPolicy: Always

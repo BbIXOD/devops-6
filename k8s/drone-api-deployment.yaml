@@ -21,7 +21,8 @@ spec:
         io.kompose.service: drone
     spec:
       containers:
-          name: drone
+        - name: drone
+          image: nginx:latest
           ports:
             - containerPort: 8080
               protocol: TCP
