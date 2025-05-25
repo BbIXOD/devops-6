@@ -119,3 +119,23 @@ jobs:
           kubectl set image deployment/com com=$REGISTRY/$IMAGE_PREFIX-com:${{ steps.env.outputs.tag }} -n ${{ steps.env.outputs.env }}
           kubectl set image deployment/drone drone=$REGISTRY/$IMAGE_PREFIX-drone:${{ steps.env.outputs.tag }} -n ${{ steps.env.outputs.env }}
           kubectl set image deployment/map map=$REGISTRY/$IMAGE_PREFIX-map:${{ steps.env.outputs.tag }} -n ${{ steps.env.outputs.env }}
+
+      - name: Get API Service Endpoint
+        id: get_service
+        run: |
+          SERVICE_NAME="com"
+          NAMESPACE=${{ steps.env.outputs.env }}
+          CLUSTER_IP=$(kubectl get service $SERVICE_NAME -n $NAMESPACE -o jsonpath='{.spec.clusterIP}')
+          PORT=$(kubectl get service $SERVICE_NAME -n $NAMESPACE -o jsonpath='{.spec.ports[0].port}')
+          API_URL="http://$CLUSTER_IP:$PORT/api/v1/client"
+          echo "api_url=$API_URL" >> $GITHUB_OUTPUT
+          echo "Fetched API URL: $API_URL"
+
+      - name: Update config.json in map-ui Pods
+        run: |
+          echo '{"API": "${{ steps.get_service.outputs.api_url }}"}' > config.json
+          PODS=$(kubectl get pods -n ${{ steps.env.outputs.env }} -l app=map -o jsonpath='{.items[*].metadata.name}')
+          for POD in $PODS; do
+            kubectl cp config.json $POD:/usr/share/nginx/html/config.json -n ${{ steps.env.outputs.env }}
+          done
+          rm config.json
