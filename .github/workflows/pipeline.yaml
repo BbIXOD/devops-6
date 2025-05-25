@@ -108,12 +108,12 @@ jobs:
           else
             ENV="development"
           fi
+          kubectl apply -f k8s/com-api-deployment.yaml -n $ENV
           kubectl apply -f k8s/com-api-service.yaml -n $ENV
-          kubectl apply -f k8s/com-api-service.yaml -n $ENV
-          kubectl apply -f k8s/drone-api-service.yaml -n $ENV
           kubectl apply -f k8s/drone-api-deployment.yaml -n $ENV
+          kubectl apply -f k8s/drone-api-service.yaml -n $ENV
           kubectl apply -f k8s/map-ui-deployment.yaml -n $ENV
-          kubectl apply -f k8s/map-ui-deployment.yaml -n $ENV
+          kubectl apply -f k8s/map-ui-service.yaml -n $ENV
 
 
       - name: Deploy to AKS
