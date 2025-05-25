@@ -43,8 +43,6 @@ jobs:
 
       - name: Build & Test com (Backend 1)
         working-directory: CommunicationControl/DevOpsProject
-        env:
-          Redis__ConnectionString: ${{ secrets.REDIS_CONNECTION_STRING }}
         run: |
           dotnet build
           dotnet test
@@ -113,6 +111,7 @@ jobs:
           kubectl apply -f k8s/drone-api-service.yaml -n ${{ steps.env.outputs.env }}
           kubectl apply -f k8s/map-ui-deployment.yaml -n ${{ steps.env.outputs.env }}
           kubectl apply -f k8s/map-ui-service.yaml -n ${{ steps.env.outputs.env }}
+          kubectl set env deployment/com Redis__ConnectionString=${{ secrets.REDIS_CONNECTION_STRING }} -n ${{ steps.env.outputs.env }}
 
 
       - name: Deploy to AKS
