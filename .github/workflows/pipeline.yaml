@@ -103,12 +103,17 @@ jobs:
 
       - name: Deploy Kubernetes manifests
         run: |
-          kubectl apply -f k8s/com-api-service.yaml
-          kubectl apply -f k8s/com-api-service.yaml
-          kubectl apply -f k8s/drone-api-service.yaml
-          kubectl apply -f k8s/drone-api-deployment.yaml
-          kubectl apply -f k8s/map-ui-deployment.yaml
-          kubectl apply -f k8s/map-ui-deployment.yaml
+          if [ "$BRANCH" == "main" ]; then
+            ENV="production"
+          else
+            ENV="development"
+          fi
+          kubectl apply -f k8s/com-api-service.yaml -n $ENV
+          kubectl apply -f k8s/com-api-service.yaml -n $ENV
+          kubectl apply -f k8s/drone-api-service.yaml -n $ENV
+          kubectl apply -f k8s/drone-api-deployment.yaml -n $ENV
+          kubectl apply -f k8s/map-ui-deployment.yaml -n $ENV
+          kubectl apply -f k8s/map-ui-deployment.yaml -n $ENV
 
 
       - name: Deploy to AKS
