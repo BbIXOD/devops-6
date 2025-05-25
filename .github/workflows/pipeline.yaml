@@ -20,6 +20,22 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Set environment variables
+        id: env
+        run: |
+          SHORT_SHA=${GITHUB_SHA::7}
+          BRANCH=$(echo "${GITHUB_REF##*/}")
+          if [ "$BRANCH" == "main" ]; then
+            TAG="$SHORT_SHA-prod"
+            ENV="production"
+          else
+            TAG="$SHORT_SHA-dev"
+            ENV="development"
+          fi
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "env=$ENV" >> $GITHUB_OUTPUT
+          echo "branch=$BRANCH" >> $GITHUB_OUTPUT
+
       - name: Set up .NET SDK
         uses: actions/setup-dotnet@v3
         with:
@@ -65,29 +81,17 @@ jobs:
           username: ${{ secrets.ACR_USERNAME }}
           password: ${{ secrets.ACR_PASSWORD }}
 
-      - name: Set tag based on branch
-        id: tag
-        run: |
-          SHORT_SHA=${GITHUB_SHA::7}
-          BRANCH=$(echo "${GITHUB_REF##*/}")
-          if [ "$BRANCH" == "main" ]; then
-            TAG="$SHORT_SHA-prod"
-          else
-            TAG="$SHORT_SHA-dev"
-          fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
-
       - name: Build Docker Images
         run: |
-          docker build -t $REGISTRY/$IMAGE_PREFIX-com:${{ steps.tag.outputs.tag }} -f Dockerfile.com .
-          docker build -t $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.tag.outputs.tag }} -f Dockerfile.drone .
-          docker build -t $REGISTRY/$IMAGE_PREFIX-map:${{ steps.tag.outputs.tag }} -f Dockerfile.map .
+          docker build -t $REGISTRY/$IMAGE_PREFIX-com:${{ steps.env.outputs.tag }} -f Dockerfile.com .
+          docker build -t $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.env.outputs.tag }} -f Dockerfile.drone .
+          docker build -t $REGISTRY/$IMAGE_PREFIX-map:${{ steps.env.outputs.tag }} -f Dockerfile.map .
 
       - name: Push Docker Images
         run: |
-          docker push $REGISTRY/$IMAGE_PREFIX-com:${{ steps.tag.outputs.tag }}
-          docker push $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.tag.outputs.tag }}
-          docker push $REGISTRY/$IMAGE_PREFIX-map:${{ steps.tag.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_PREFIX-com:${{ steps.env.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_PREFIX-drone:${{ steps.env.outputs.tag }}
+          docker push $REGISTRY/$IMAGE_PREFIX-map:${{ steps.env.outputs.tag }}
 
 
       - name: Login to azure
@@ -103,31 +107,16 @@ jobs:
 
       - name: Deploy Kubernetes manifests
         run: |
-          if [ "$BRANCH" == "main" ]; then
-            ENV="production"
-          else
-            ENV="development"
-          fi
-          kubectl apply -f k8s/com-api-deployment.yaml -n $ENV
-          kubectl apply -f k8s/com-api-service.yaml -n $ENV
-          kubectl apply -f k8s/drone-api-deployment.yaml -n $ENV
-          kubectl apply -f k8s/drone-api-service.yaml -n $ENV
-          kubectl apply -f k8s/map-ui-deployment.yaml -n $ENV
-          kubectl apply -f k8s/map-ui-service.yaml -n $ENV
+          kubectl apply -f k8s/com-api-deployment.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/com-api-service.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/drone-api-deployment.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/drone-api-service.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/map-ui-deployment.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/map-ui-service.yaml -n ${{ steps.env.outputs.env }}
 
 
       - name: Deploy to AKS
         run: |
-          SHORT_SHA=${GITHUB_SHA::7}
-          BRANCH=$(echo "${GITHUB_REF##*/}")
-          if [ "$BRANCH" == "main" ]; then
-            TAG="$SHORT_SHA-prod"
-            ENV="production"
-          else
-            TAG="$SHORT_SHA-dev"
-            ENV="development"
-          fi
-
-          kubectl set image deployment/com com=$REGISTRY/$IMAGE_PREFIX-com:$TAG -n $ENV
-          kubectl set image deployment/drone drone=$REGISTRY/$IMAGE_PREFIX-drone:$TAG -n $ENV
-          kubectl set image deployment/map map=$REGISTRY/$IMAGE_PREFIX-map:$TAG -n $ENV
+          kubectl set image deployment/com com=$REGISTRY/$IMAGE_PREFIX-com:${{ steps.env.outputs.tag }} -n ${{ steps.env.outputs.env }}
+          kubectl set image deployment/drone drone=$REGISTRY/$IMAGE_PREFIX-drone:${{ steps.env.outputs.tag }} -n ${{ steps.env.outputs.env }}
+          kubectl set image deployment/map map=$REGISTRY/$IMAGE_PREFIX-map:${{ steps.env.outputs.tag }} -n ${{ steps.env.outputs.env }}
