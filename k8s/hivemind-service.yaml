@@ -5,13 +5,12 @@ metadata:
     kompose.cmd: kompose convert -f docker-compose.yaml
     kompose.version: 1.35.0 (HEAD)
   labels:
-    io.kompose.service: com
-  name: com
+    io.kompose.service: hivemind
+  name: hivemind
 spec:
-  selector:
-    io.kompose.service: com
   ports:
-    - name: "8080"
-      port: 8080
+    - name: "8081"
+      port: 8081
       targetPort: 8080
-  type: LoadBalancer
+  selector:
+    io.kompose.service: hivemind

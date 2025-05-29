@@ -1,0 +1,257 @@
+name: CI/CD
+
+on:
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+# Global environment variables
+env:
+  # Container registry settings
+  CONTAINER_REGISTRY: lab0acr.azurecr.io
+  CONTAINER_PREFIX: lab6devops
+  
+  # Environment configuration based on branch
+  IS_MAIN_BRANCH: ${{ github.ref == 'refs/heads/main' }}
+  GIT_SHORT_SHA: ${{ github.sha }}
+  GIT_BRANCH: ${{ github.ref_name }}
+  
+  # Derived values
+  DEPLOY_ENV: ${{ github.ref == 'refs/heads/main' && 'production' || 'development' }}
+  CONTAINER_TAG: ${{ github.sha }}-${{ github.ref == 'refs/heads/main' && 'prod' || 'dev' }}
+  
+  # Service names
+  HIVEMIND_SERVICE: hivemind
+  MAPCLIENT_SERVICE: mapclient
+  COMMUNICATIONCONTROL_SERVICE: communicationcontrol
+
+# Global secrets (referenced in jobs)
+jobs:
+  setup:
+    runs-on: ubuntu-latest
+    outputs:
+      sonar-token: ${{ steps.set-secrets.outputs.sonar-token }}
+      acr-username: ${{ steps.set-secrets.outputs.acr-username }}
+      acr-password: ${{ steps.set-secrets.outputs.acr-password }}
+    steps:
+      - name: Set up secrets
+        id: set-secrets
+        run: |
+          echo "sonar-token=${{ secrets.SONAR_TOKEN }}" >> $GITHUB_OUTPUT
+          echo "acr-username=${{ secrets.ACR_USERNAME }}" >> $GITHUB_OUTPUT
+          echo "acr-password=${{ secrets.ACR_PASSWORD }}" >> $GITHUB_OUTPUT
+
+  scan:
+    needs: setup
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: SonarCloud Scan
+        uses: SonarSource/sonarcloud-github-action@v2
+        with:
+          projectBaseDir: .
+        env:
+          SONAR_TOKEN: ${{ needs.setup.outputs.sonar-token }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Required for PR decoration
+
+  build-hivemind:
+    runs-on: ubuntu-latest
+    needs: [setup, scan]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build and test
+        working-directory: CommunicationControl/DevOpsProject.HiveMind.API
+        run: |
+          dotnet build -o ./publish
+          dotnet test
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.REGISTRY }}
+          username: ${{ secrets.ACR_USERNAME }}
+          password: ${{ secrets.ACR_PASSWORD }}
+
+      - name: Build and push container
+        run: |
+          IMAGE_NAME=${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_PREFIX }}-${{ env.HIVEMIND_SERVICE }}:${{ env.CONTAINER_TAG }}
+          docker build -t $IMAGE_NAME -f CommunicationControl/DevOpsProject.HiveMind.API/Dockerfile .
+          docker push $IMAGE_NAME
+          
+          # Clean up to free space
+          docker rmi $IMAGE_NAME
+
+  build-mapclient:
+    runs-on: ubuntu-latest
+    needs: [setup, scan]  # Depend on both setup and scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Build and test
+        working-directory: MapClient
+        run: |
+          npm ci
+          npm run build
+          npm run test
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ needs.setup.outputs.acr-username }}
+          password: ${{ needs.setup.outputs.acr-password }}
+
+      - name: Build and push container
+        run: |
+          IMAGE_NAME=${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_PREFIX }}-${{ env.MAPCLIENT_SERVICE }}:${{ env.CONTAINER_TAG }}
+          docker build -t $IMAGE_NAME -f MapClient/Dockerfile .
+          docker push $IMAGE_NAME
+          
+          # Clean up to free space
+          docker rmi $IMAGE_NAME
+
+  build-communicationcontrol:
+    runs-on: ubuntu-latest
+    needs: [setup, scan]  # Depend on both setup and scan
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set up .NET SDK
+        uses: actions/setup-dotnet@v3
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Build and test
+        working-directory: CommunicationControl/DevOpsProject
+        run: |
+          dotnet build -o ./publish
+          dotnet test
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ needs.setup.outputs.acr-username }}
+          password: ${{ needs.setup.outputs.acr-password }}
+
+      - name: Build and push container
+        run: |
+          IMAGE_NAME=${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_PREFIX }}-${{ env.COMMUNICATIONCONTROL_SERVICE }}:${{ env.CONTAINER_TAG }}
+          docker build -t $IMAGE_NAME -f CommunicationControl/DevOpsProject/Dockerfile .
+          docker push $IMAGE_NAME
+          
+          # Clean up to free space
+          docker rmi $IMAGE_NAME
+
+  cleanup:
+    runs-on: ubuntu-latest
+    needs: [build-hivemind, build-mapclient, build-communicationcontrol]
+    if: always()
+    steps:
+      - name: Clean up Docker
+        run: |
+          # Remove all unused containers, networks, and images
+          docker system prune -f
+          
+          # Remove all unused volumes
+          docker volume prune -f
+
+  kubernetes-setup:
+    runs-on: ubuntu-latest
+    needs: [build-hivemind, build-mapclient, build-communicationcontrol]
+    if: success()  # Only run if all build jobs succeeded
+    
+    # Environment variables specific to this job
+    env:
+      KUBE_CONFIG: ${{ secrets.KUBE_CONFIG }}  # Base64 encoded kubeconfig
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Login to ACR
+        uses: azure/docker-login@v2
+        with:
+          login-server: ${{ env.CONTAINER_REGISTRY }}
+          username: ${{ needs.setup.outputs.acr-username }}
+          password: ${{ needs.setup.outputs.acr-password }}
+
+      - name: Ensure images exist in registry
+        run: |
+          # This step is just to verify images were pushed in previous steps
+          # No need to push again as we already pushed in build steps
+          echo "All container images should be in the registry from previous build steps"
+
+      - name: Login to azure
+        uses: azure/login@v1
+        with:
+          creds: ${{ steps.env.outputs.AZURE_CREDENTIALS }}
+
+      - name: Set up Kubeconfig
+        uses: azure/aks-set-context@v3
+        with:
+          cluster-name: ${{ steps.env.outputs.AKS_CLUSTER }}
+          resource-group: ${{ steps.env.outputs.AKS_RESOURCE_GROUP }}
+
+      - name: Deploy Kubernetes
+        run: |
+          # Apply manifests
+          kubectl apply -f k8s/communicationcontrol-deployment.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/communicationcontrol-service.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/hivemind-deployment.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/hivemind-service.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/mapclient-deployment.yaml -n ${{ steps.env.outputs.env }}
+          kubectl apply -f k8s/mapclient-service.yaml -n ${{ steps.env.outputs.env }}
+          kubectl set env deployment/communicationcontrol Redis__ConnectionString=${{ steps.env.outputs.REDIS_CONNECTION_STRING }} -n ${{ steps.env.outputs.env }}
+
+          # Update images
+          # Update container images with proper names and tags
+          kubectl set image deployment/${{ env.COMMUNICATIONCONTROL_SERVICE }} ${{ env.COMMUNICATIONCONTROL_SERVICE }}=${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_PREFIX }}-${{ env.COMMUNICATIONCONTROL_SERVICE }}:${{ env.CONTAINER_TAG }} -n ${{ env.DEPLOY_ENV }}
+          kubectl set image deployment/${{ env.HIVEMIND_SERVICE }} ${{ env.HIVEMIND_SERVICE }}=${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_PREFIX }}-${{ env.HIVEMIND_SERVICE }}:${{ env.CONTAINER_TAG }} -n ${{ env.DEPLOY_ENV }}
+          kubectl set image deployment/${{ env.MAPCLIENT_SERVICE }} ${{ env.MAPCLIENT_SERVICE }}=${{ env.CONTAINER_REGISTRY }}/${{ env.CONTAINER_PREFIX }}-${{ env.MAPCLIENT_SERVICE }}:${{ env.CONTAINER_TAG }} -n ${{ env.DEPLOY_ENV }}
+          
+      - name: Create config.json and push to ConfigMap
+        run: |
+          COMM_IP=$(kubectl get svc communicationcontrol -n ${{ env.DEPLOY_ENV }} -o jsonpath='{.status.loadBalancer.ingress[0].ip}')
+          echo "Using CommunicationControl IP: $COMM_IP"
+
+          # Build the JSON file
+          mkdir -p temp-config
+          echo "{ \"apiUrl\": \"http://$COMM_IP:8080/api/v1/client\" }" > temp-config/config.json
+
+          # Create or update the ConfigMap from file
+          kubectl create configmap mapclient-config \
+            --from-file=config.json=temp-config/config.json \
+            -n ${{ env.DEPLOY_ENV }} --dry-run=client -o yaml | kubectl apply -f -
+
+          # Clean up temp file
+          rm -rf temp-config
+
+      - name: Restart mapclient deployment to refresh config mount
+        run: |
+          kubectl rollout restart deployment/${{ env.MAPCLIENT_SERVICE }} -n ${{ env.DEPLOY_ENV }}

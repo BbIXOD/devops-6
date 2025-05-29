@@ -5,12 +5,13 @@ metadata:
     kompose.cmd: kompose convert -f docker-compose.yaml
     kompose.version: 1.35.0 (HEAD)
   labels:
-    io.kompose.service: drone
-  name: drone
+    io.kompose.service: communicationcontrol
+  name: communicationcontrol
 spec:
-  ports:
-    - name: "8081"
-      port: 8081
-      targetPort: 8080
   selector:
-    io.kompose.service: drone
+    io.kompose.service: communicationcontrol
+  ports:
+    - name: "8080"
+      port: 8080
+      targetPort: 8080
+  type: LoadBalancer

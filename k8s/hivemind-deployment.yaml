@@ -5,25 +5,25 @@ metadata:
     kompose.cmd: kompose convert -f docker-compose.yaml
     kompose.version: 1.35.0 (HEAD)
   labels:
-    io.kompose.service: com
-  name: com
+    io.kompose.service: hivemind
+  name: hivemind
 spec:
   replicas: 1
   selector:
     matchLabels:
-      io.kompose.service: com
+      io.kompose.service: hivemind
   template:
     metadata:
       annotations:
         kompose.cmd: kompose convert -f docker-compose.yaml
         kompose.version: 1.35.0 (HEAD)
       labels:
-        io.kompose.service: com
+        io.kompose.service: hivemind
     spec:
       containers:
-      - name: com
-        image: nginx:latest
-        ports:
-        - containerPort: 8080
-          protocol: TCP
+        - name: hivemind
+          image: nginx:latest
+          ports:
+            - containerPort: 8080
+              protocol: TCP
       restartPolicy: Always

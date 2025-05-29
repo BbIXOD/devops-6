@@ -5,25 +5,25 @@ metadata:
     kompose.cmd: kompose convert -f docker-compose.yaml
     kompose.version: 1.35.0 (HEAD)
   labels:
-    io.kompose.service: drone
-  name: drone
+    io.kompose.service: communicationcontrol
+  name: communicationcontrol
 spec:
   replicas: 1
   selector:
     matchLabels:
-      io.kompose.service: drone
+      io.kompose.service: communicationcontrol
   template:
     metadata:
       annotations:
         kompose.cmd: kompose convert -f docker-compose.yaml
         kompose.version: 1.35.0 (HEAD)
       labels:
-        io.kompose.service: drone
+        io.kompose.service: communicationcontrol
     spec:
       containers:
-        - name: drone
-          image: nginx:latest
-          ports:
-            - containerPort: 8080
-              protocol: TCP
+      - name: communicationcontrol
+        image: nginx:latest
+        ports:
+        - containerPort: 8080
+          protocol: TCP
       restartPolicy: Always

@@ -5,8 +5,8 @@ metadata:
     kompose.cmd: kompose convert -f docker-compose.yaml
     kompose.version: 1.35.0 (HEAD)
   labels:
-    io.kompose.service: map
-  name: map
+    io.kompose.service: mapclient
+  name: mapclient
 spec:
   type: LoadBalancer
   ports:
@@ -14,4 +14,4 @@ spec:
       port: 3000
       targetPort: 80
   selector:
-    io.kompose.service: map
+    io.kompose.service: mapclient

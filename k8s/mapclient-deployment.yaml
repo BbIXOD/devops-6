@@ -1,0 +1,36 @@
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mapclient
+  labels:
+    io.kompose.service: mapclient
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      io.kompose.service: mapclient
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        io.kompose.service: mapclient
+    spec:
+      containers:
+        - name: mapclient
+          image: nginx:latest
+          ports:
+            - containerPort: 80
+              protocol: TCP
+          volumeMounts:
+            - name: config-volume
+              mountPath: /usr/share/nginx/html/config.json
+              subPath: config.json
+      volumes:
+        - name: config-volume
+          configMap:
+            name: frontend-config
+            items:
+              - key: config.json
+                path: config.json
